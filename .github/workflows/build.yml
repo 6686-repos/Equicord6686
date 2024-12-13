@@ -7,7 +7,7 @@ on:
             - main
 env:
     FORCE_COLOR: true
-    GITHUB_TOKEN: ${{ secrets.ETOKEN }}
+    GITHUB_TOKEN: ${{ github.token }}
     REPO: alfredo6686/Equibored
     USERNAME: GitHub-Actions
 
