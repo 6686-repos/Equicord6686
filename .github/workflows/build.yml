@@ -8,7 +8,7 @@ on:
 env:
     FORCE_COLOR: true
     GITHUB_TOKEN: ${{ github.token }}
-    REPO: alfredo6686/Equibored
+    REPO: alfredo6686/Equicord
     USERNAME: GitHub-Actions
 
 permissions: write-all
