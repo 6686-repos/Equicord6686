@@ -1,4 +1,4 @@
-name: Sync Vencord Main
+name: Sync Equicord Main
 
 env:
     WORKFLOW_TOKEN: ${{ secrets.ETOKEN }}
