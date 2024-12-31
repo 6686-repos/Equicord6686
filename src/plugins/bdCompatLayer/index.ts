@@ -124,6 +124,8 @@ const thePlugin = {
         }
     },
     originalBuffer: {},
+    globalWasNotExisting: false,
+    globalDefineWasNotExisting: false,
     start() {
         injectSettingsTabs();
         const reimplementationsReady = getDeferred<void>();
@@ -396,6 +398,14 @@ const thePlugin = {
         window.require = FakeRequireRedirect;
         this.originalBuffer = window.Buffer;
         window.Buffer = BdApiReImplementation.Webpack.getModule(x => x.INSPECT_MAX_BYTES)?.Buffer;
+        if (typeof window.global === "undefined") {
+            this.globalWasNotExisting = true;
+            this.globalDefineWasNotExisting = true;
+        } else if (typeof window.global.define === "undefined") {
+            this.globalDefineWasNotExisting = true;
+        }
+        window.global = window.global || globalThis;
+        window.global.define = window.global.define || function () { };
         // window.BdApi.ReqImpl = ReImplementationObject;
         windowBdCompatLayer.fakeClipboard = (() => {
             const try1 = BdApiReImplementation.Webpack.getModule(x => x.clipboard);
@@ -432,13 +442,18 @@ const thePlugin = {
         setTimeout(() => {
             fakeLoading.remove();
         }, 500);
+        const fakeBdHead = document.createElement("bd-head");
+        document.body.appendChild(fakeBdHead);
         const fakeBdStyles = document.createElement("bd-styles");
-        document.body.appendChild(fakeBdStyles);
+        fakeBdHead.appendChild(fakeBdStyles);
+        const fakeBdScripts = document.createElement("bd-scripts");
+        fakeBdHead.appendChild(fakeBdScripts);
         // const checkInterval = setInterval(() => {
         //     if (window.BdApi.ReqImpl.fs === undefined)
         //         return;
         //     clearInterval(checkInterval);
         Promise.all([windowBdCompatLayer.fsReadyPromise.promise, injectedAndPatched]).then(() => {
+            getGlobalApi().DOM.addStyle("bd-compat-layer-stuff", '.bd-compat-setting > div > h2 { display: none; } .bd-compat-setting label { height: 0px; } .bd-compat-setting div[class^="labelRow_"] { height: 0px; }');
             windowBdCompatLayer.Router?.listeners.add(windowBdCompatLayer.mainRouterListener);
             const observer = new MutationObserver(mutations => mutations.forEach(m => window.GeneratedPlugins.forEach(p => BdApiReImplementation.Plugins.isEnabled(p.name) && p.instance.observer?.(m))));
             observer.observe(document, {
@@ -581,6 +596,7 @@ const thePlugin = {
         await removeAllCustomPlugins();
         console.warn("Removing added css...");
         getGlobalApi().DOM.removeStyle("OwOStylesOwO");
+        getGlobalApi().DOM.removeStyle("bd-compat-layer-stuff");
         console.warn("Removing settings tab...");
         unInjectSettingsTab();
         // console.warn("Freeing blobs...");
@@ -590,6 +606,15 @@ const thePlugin = {
         // });
         // URL.revokeObjectURL(window.BdCompatLayer.contextMenuBlobUrl);
         // URL.revokeObjectURL(window.BdCompatLayer.discordModulesBlobUrl);
+        if (this.globalDefineWasNotExisting === true) {
+            console.warn("Removing global.define...");
+            delete window.global.define;
+        }
+        if (this.globalWasNotExisting === true) {
+            console.warn("Removing global...");
+            // @ts-ignore
+            delete window.global;
+        }
         console.warn("Removing compat layer...");
         delete window.BdCompatLayer;
         console.warn("Removing BdApi...");

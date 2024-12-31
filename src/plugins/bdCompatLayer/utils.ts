@@ -114,7 +114,7 @@ export function readdirPromise(filename) {
 //     );
 // }
 
-export function createTextForm(field1, field2, asLink = false, linkLabel = field2) {
+export function createTextForm(field1: React.ReactNode | string, field2: string, asLink = false, linkLabel = field2) {
     return React.createElement(
         "div",
         {},

@@ -18,12 +18,25 @@
 
 /* eslint-disable eqeqeq */
 import { Settings } from "@api/Settings";
+const VenComponents: Record<OptionType, React.ComponentType<ISettingElementProps<any>>> = {
+    [OptionType.STRING]: SettingTextComponent,
+    [OptionType.NUMBER]: SettingNumericComponent,
+    [OptionType.BIGINT]: SettingNumericComponent,
+    [OptionType.BOOLEAN]: SettingBooleanComponent,
+    [OptionType.SELECT]: SettingSelectComponent,
+    [OptionType.SLIDER]: SettingSliderComponent,
+    [OptionType.COMPONENT]: SettingCustomComponent
+};
+
+import { ISettingElementProps, SettingBooleanComponent, SettingCustomComponent, SettingNumericComponent, SettingSelectComponent, SettingSliderComponent, SettingTextComponent } from "@components/PluginSettings/components";
+import { OptionType, PluginOptionBase, PluginOptionComponent, PluginOptionSelect } from "@utils/types";
+import { Forms, Text } from "@webpack/common";
 
 import { PLUGIN_NAME } from "./constants";
 import { fetchWithCorsProxyFallback } from "./fakeStuff";
 import { AssembledBetterDiscordPlugin } from "./pluginConstructor";
 import { getModule as BdApi_getModule, monkeyPatch as BdApi_monkeyPatch, Patcher } from "./stuffFromBD";
-import { docCreateElement } from "./utils";
+import { addLogger, docCreateElement } from "./utils";
 
 class PatcherWrapper {
     #label;
@@ -112,13 +125,9 @@ export const WebpackHolder = {
         // get byStrings() {
         //     return WebpackHolder.getByStrings;
         // }
-        byStrings(...strings) {
-            return module => {
-                const moduleString = module?.toString([]) || "";
-                if (!moduleString) return false; // Could not create string
-
-                return strings.every(s => moduleString.includes(s));
-            };
+        // uuhhhh?
+        get byStrings() {
+            return Vencord.Webpack.filters.byCode;
         }
     },
     getModule: BdApi_getModule,
@@ -300,6 +309,18 @@ class DataWrapper {
     }
 }
 
+type SettingsType = {
+    type: string,
+    id: string,
+    name: string,
+    note?: string,
+    settings?: SettingsType[],
+    collapsible?: boolean,
+    shown?: boolean,
+    value?: any,
+    options?: { label: string, value: number }[],
+};
+
 export const UIHolder = {
     alert(title: string, content: any) {
         return this.showConfirmationModal(title, content, { cancelText: null });
@@ -334,7 +355,7 @@ export const UIHolder = {
             color: "white",
         };
 
-        const React = getGlobalApi().React;
+        const { React } = getGlobalApi();
         const whiteTextContent = React.createElement("div", { style: whiteTextStyle }, content);
 
         moreReact.push(whiteTextContent);
@@ -495,6 +516,112 @@ export const UIHolder = {
             }
         };
     },
+    buildSettingsPanel(options: { settings: SettingsType[], onChange: CallableFunction }) {
+        const settings: React.ReactNode[] = [];
+        const { React } = getGlobalApi();
+        const targetSettingsToSet = { enabled: true };
+        for (let i = 0; i < options.settings.length; i++) {
+            const current = options.settings[i];
+            if (current.type === "category" && current.settings) {
+                // let's hope no one makes category in category
+                for (let j = 0; j < current.settings.length; j++) {
+                    const currentInCategory = current.settings[j];
+                    Object.defineProperty(targetSettingsToSet, currentInCategory.id, {
+                        get() {
+                            if (typeof currentInCategory.value === "function")
+                                return currentInCategory.value();
+                            else
+                                return currentInCategory.value;
+                        },
+                        set(val) {
+                            options.onChange(current.id, currentInCategory.id, val); // first is category id, setting id and then new value
+                        }
+                    });
+                }
+            }
+            else {
+                Object.defineProperty(targetSettingsToSet, current.id, {
+                    get() {
+                        if (typeof current.value === "function")
+                            return current.value();
+                        else
+                            return current.value;
+                    },
+                    set(val) {
+                        options.onChange(null, current.id, val);
+                    }
+                });
+            }
+        }
+        const craftOptions = (now: SettingsType[]) => {
+            const tempResult: React.ReactNode[] = [];
+            for (let i = 0; i < now.length; i++) {
+                const current = now[i];
+                const fakeOption: PluginOptionBase & { type: number } = {
+                    description: "",
+                    type: 0,
+                };
+                switch (current.type) {
+                    // case "category": {
+                    //     fakeOption.type = OptionType.COMPONENT;
+                    //     (fakeOption as PluginOptionComponent).component = () => { return React.createElement(Text, { variant: "heading-lg/semibold" }, current.name); };
+                    //     break;
+                    // }
+                    case "number": {
+                        fakeOption.type = OptionType.NUMBER;
+                        fakeOption.description = current.note!;
+                        break;
+                    }
+                    case "switch": {
+                        fakeOption.type = OptionType.BOOLEAN;
+                        fakeOption.description = current.note!;
+                        break;
+                    }
+                    case "text": {
+                        fakeOption.type = OptionType.STRING;
+                        fakeOption.description = current.note!;
+                        break;
+                    }
+                    case "dropdown": {
+                        fakeOption.type = OptionType.SELECT;
+                        fakeOption.description = current.note!;
+                        const fakeOptionAsSelect = fakeOption as PluginOptionSelect;
+                        fakeOptionAsSelect.options = current.options!;
+                        break;
+                    }
+                    default: {
+                        fakeOption.type = OptionType.COMPONENT;
+                        (fakeOption as PluginOptionComponent).component = () => { return React.createElement(React.Fragment); };
+                        break;
+                    }
+                }
+                const fakeElement = VenComponents[fakeOption.type] as typeof VenComponents[keyof typeof VenComponents];
+                const craftingResult = current.type === "category" ?
+                    React.createElement("div", { style: { marginBottom: 8 } },
+                        [React.createElement(Forms.FormDivider), React.createElement(Text, { variant: "heading-lg/semibold" }, current.name)]) :
+                    React.createElement("div", { className: "bd-compat-setting", style: { marginBottom: 8 } }, [
+                        React.createElement(Text, { variant: "heading-md/semibold" }, current.name),
+                        React.createElement(fakeElement, {
+                            id: current.id,
+                            key: current.id,
+                            option: fakeOption,
+                            onChange(newValue) {
+                                targetSettingsToSet[current.id] = newValue;
+                            },
+                            onError() { },
+                            pluginSettings: targetSettingsToSet,
+                        })
+                    ]);
+                settings.push(craftingResult);
+                if (current.type === "category") {
+                    craftOptions(current.settings!);
+                }
+            }
+        };
+        craftOptions(options.settings);
+        const result = React.createElement("div", {}, settings);
+        return result;
+    }
 };
 
 export const DOMHolder = {
@@ -523,6 +650,24 @@ export const DOMHolder = {
         if (child) element.append(child);
         if (target) document.querySelector(target).append(element);
         return element;
+    },
+    injectScript(targetName: string, url: string) { // who thought this is a good idea?
+        targetName = targetName.replace(/^[^a-z]+|[^\w-]+/gi, "-"); // TODO: move this to a function or something
+        return new Promise((resolve, reject) => {
+            const theRemoteScript = document
+                .querySelector("bd-scripts")?.querySelector(`#${targetName}`) || this.createElement("script", { id: targetName });
+            theRemoteScript.src = url;
+            theRemoteScript.onload = resolve;
+            theRemoteScript.onerror = reject;
+            document.querySelector("bd-scripts")?.append(theRemoteScript);
+        });
+    },
+    removeScript(targetName: string) {
+        targetName = targetName.replace(/^[^a-z]+|[^\w-]+/gi, "-");
+        const theRemoteScript = document
+            .querySelector("bd-scripts")?.querySelector(`#${targetName}`);
+        if (theRemoteScript != null)
+            theRemoteScript.remove();
     },
 };
 
@@ -732,16 +877,25 @@ class BdApiReImplementationInstance {
         UIHolder.showConfirmationModal(title, content, settings);
     }
     get injectCSS() {
-        return DOMHolder.addStyle;
+        return DOMHolder.addStyle.bind(DOMHolder);
     }
     get DOM() {
         return this.#dom;
+    }
+    get Logger() {
+        return addLogger();
+    }
+    get linkJS() {
+        return DOMHolder.injectScript.bind(DOMHolder);
+    }
+    get unlinkJS() {
+        return DOMHolder.removeScript.bind(DOMHolder);
     }
 }
 
 function assignToGlobal() {
     const letsHopeThisObjectWillBeTheOnlyGlobalBdApiInstance = new BdApiReImplementationInstance();
-    const gettersToSet = ["Components", "ContextMenu", "DOM", "Data", "Patcher", "Plugins", "React", "ReactDOM", "ReactUtils", "UI", "Net", "Utils", "Webpack", "labelsOfInstancedAPI", "alert", "disableSetting", "enableSetting", "findModule", "findModuleByProps", "findAllModules", "getData", "isSettingEnabled", "loadData", "monkeyPatch", "saveData", "setData", "showConfirmationModal", "showNotice", "showToast", "suppressErrors", "injectCSS"];
+    const gettersToSet = ["Components", "ContextMenu", "DOM", "Data", "Patcher", "Plugins", "React", "ReactDOM", "ReactUtils", "UI", "Net", "Utils", "Webpack", "labelsOfInstancedAPI", "alert", "disableSetting", "enableSetting", "findModule", "findModuleByProps", "findAllModules", "getData", "isSettingEnabled", "loadData", "monkeyPatch", "saveData", "setData", "showConfirmationModal", "showNotice", "showToast", "suppressErrors", "injectCSS", "Logger", "linkJS", "unlinkJS"];
     const settersToSet = ["ContextMenu"];
     for (let index = 0; index < gettersToSet.length; index++) {
         const element = gettersToSet[index];
@@ -757,7 +911,7 @@ function assignToGlobal() {
     }
 }
 export function cleanupGlobal() {
-    const gettersToSet = ["Components", "ContextMenu", "DOM", "Data", "Patcher", "Plugins", "React", "ReactDOM", "ReactUtils", "UI", "Net", "Utils", "Webpack", "labelsOfInstancedAPI", "alert", "disableSetting", "enableSetting", "findModule", "findModuleByProps", "findAllModules", "getData", "isSettingEnabled", "loadData", "monkeyPatch", "saveData", "setData", "showConfirmationModal", "showNotice", "showToast", "suppressErrors", "injectCSS"];
+    const gettersToSet = ["Components", "ContextMenu", "DOM", "Data", "Patcher", "Plugins", "React", "ReactDOM", "ReactUtils", "UI", "Net", "Utils", "Webpack", "labelsOfInstancedAPI", "alert", "disableSetting", "enableSetting", "findModule", "findModuleByProps", "findAllModules", "getData", "isSettingEnabled", "loadData", "monkeyPatch", "saveData", "setData", "showConfirmationModal", "showNotice", "showToast", "suppressErrors", "injectCSS", "Logger", "linkJS", "unlinkJS"];
     for (let index = 0; index < gettersToSet.length; index++) {
         const element = gettersToSet[index];
         delete getGlobalApi()[element];
