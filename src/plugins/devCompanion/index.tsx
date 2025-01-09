@@ -22,9 +22,7 @@ import { Logger } from "@utils/Logger";
 import definePlugin, { OptionType, ReporterTestable } from "@utils/types";
 
 import { initWs, socket, stopWs } from "./initWs";
-console.log("imported");
 export const PORT = 8485;
-const NAV_ID = "dev-companion-reconnect";
 
 export const logger = new Logger("DevCompanion");
 
@@ -61,9 +59,7 @@ export default definePlugin({
     },
 
     start() {
-        // if we're running the reporter, we need to initws in the reporter file to avoid a race condition
-        if (!IS_COMPANION_TEST)
-            initWs();
+        initWs();
     },
 
     stop: stopWs,
