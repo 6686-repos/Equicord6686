@@ -17,6 +17,8 @@
 */
 
 import { classNameFactory } from "@api/Styles";
+import { FolderIcon, PlusIcon, RestartIcon } from "@components/Icons";
+import { QuickAction, QuickActionCard } from "@components/VencordSettings/quickActions";
 import { SettingsTab, wrapTab } from "@components/VencordSettings/shared";
 import { Plugin } from "@utils/types";
 import { Card, Forms, React, useRef } from "@webpack/common";
@@ -26,9 +28,6 @@ import { getGlobalApi } from "./fakeBdApi";
 import { addCustomPlugin, convertPlugin } from "./pluginConstructor";
 import TreeView, { findInTree, TreeNode } from "./treeView";
 import { FSUtils, readdirPromise, reloadCompatLayer, ZIPUtils } from "./utils";
-
-import { FolderIcon, PlusIcon, RestartIcon } from "@components/Icons";
-import { QuickAction, QuickActionCard } from "@components/VencordSettings/quickActions";
 
 type SettingsPlugin = Plugin & {
     customSections: ((ID: Record<string, unknown>) => any)[];

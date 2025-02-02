@@ -18,7 +18,7 @@
 
 import { addLogger, evalInScope, findFirstLineWithoutX } from "./utils";
 
-export const TARGET_HASH = "b62deff1407c52bda5415a2d464de9566a78e4f4";
+export const TARGET_HASH = "df5c2887eb5eddb8d9f3e470b51cdfa5cec814db";
 
 export const FakeEventEmitter = class {
     callbacks: any;
@@ -60,7 +60,7 @@ export const addDiscordModules = async proxyUrl => {
     const ModuleDataText = (await request.text()).replaceAll("\r", "");
     const ev =
         "(" +
-        ModuleDataText.split("export default Utilities.memoizeObject(")[1];
+        (ModuleDataText.split("const DiscordModules = Utilities.memoizeObject(")[1]).split(/;\s*export default DiscordModules;/)[0];
     // const sourceBlob = new Blob([ev], { type: "application/javascript" });
     // const sourceBlobUrl = URL.createObjectURL(sourceBlob);
     // return { output: evalInScope(ev + "\n//# sourceURL=" + sourceBlobUrl, context), sourceBlobUrl };
@@ -80,6 +80,9 @@ export const addContextMenu = async (DiscordModules, proxyUrl) => {
     const context = {
         get WebpackModules() {
             return window.BdApi.Webpack;
+        },
+        get Filters() {
+            return window.BdApi.Webpack.Filters;
         },
         DiscordModules,
         get Patcher() {
